@@ -1,10 +1,11 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useRoom } from '@/hooks/useRoom'
 import { Lobby } from '@/components/game/Lobby'
 import { GameBoard } from '@/components/game/GameBoard'
+import { MokadoLoader } from '@/components/ui/MokadoLoader'
 
 interface Props {
   params: Promise<{ code: string }>
@@ -12,28 +13,25 @@ interface Props {
 
 export default function RoomPage({ params }: Props) {
   const { code } = use(params)
-  const searchParams = useSearchParams()
   const router = useRouter()
 
-  const [myPlayerId, setMyPlayerId] = useState<string | null>(
-    searchParams.get('player_id')
-  )
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(null)
+  const [idReady, setIdReady] = useState(false)
   const [starting, setStarting] = useState(false)
 
-  // Persist player_id in sessionStorage so page refresh doesn't lose it
   useEffect(() => {
-    const key = `player_id_${code}`
-    const stored = sessionStorage.getItem(key)
-    const fromUrl = searchParams.get('player_id')
-    if (fromUrl) {
-      sessionStorage.setItem(key, fromUrl)
-      setMyPlayerId(fromUrl)
-    } else if (stored) {
-      setMyPlayerId(stored)
-    }
-  }, [code, searchParams])
+    const stored = localStorage.getItem(`player_id_${code}`)
+    if (stored) setMyPlayerId(stored)
+    setIdReady(true)
+  }, [code])
 
   const { state, loading, error, refetch } = useRoom({ code, myPlayerId })
+
+  useEffect(() => {
+    if (idReady && !loading && state && (!myPlayerId || !state.myPlayer)) {
+      router.replace('/join')
+    }
+  }, [idReady, loading, state, myPlayerId, router])
 
   const handleStart = async () => {
     setStarting(true)
@@ -49,17 +47,13 @@ export default function RoomPage({ params }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ player_id: myPlayerId }),
       })
-      sessionStorage.removeItem(`player_id_${code}`)
+      localStorage.removeItem(`player_id_${code}`)
     }
     router.push('/')
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-white text-xl">Memuat room...</p>
-      </div>
-    )
+    return <MokadoLoader label="Memuat room" />
   }
 
   if (error || !state) {
@@ -71,11 +65,7 @@ export default function RoomPage({ params }: Props) {
     )
   }
 
-  if (!myPlayerId || !state.myPlayer) {
-    // Player_id not set or not in this room — redirect to join
-    router.replace(`/join`)
-    return null
-  }
+  if (!myPlayerId || !state.myPlayer) return null
 
   if (state.room.status === 'waiting') {
     return (

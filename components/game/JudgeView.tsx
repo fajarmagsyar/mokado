@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '../ui/Button'
+import { PlayingCard } from './Hand'
 import type { Card, FinalPitch, Player } from '@/lib/game/types'
 
 interface JudgeViewProps {
@@ -12,29 +13,41 @@ interface JudgeViewProps {
   isJudge: boolean
   onPick: (winnerPlayerId: string) => void
   picking: boolean
+  expectedPitchCount: number
 }
 
 interface PitchDisplay extends FinalPitch {
   revealed: boolean
 }
 
-export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picking }: JudgeViewProps) {
+export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picking, expectedPitchCount }: JudgeViewProps) {
   const [pitches, setPitches] = useState<PitchDisplay[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const res = await fetch(`/api/rounds/${roundId}/final-pitch`)
-      if (res.ok) {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        if (cancelled) return
+        if (attempt > 0) await new Promise(r => setTimeout(r, 800))
+        const res = await fetch(`/api/rounds/${roundId}/final-pitch`)
+        if (!res.ok) continue
         const data = await res.json()
-        setPitches((data.pitches ?? []).map((p: FinalPitch) => ({ ...p, revealed: false })))
+        const loaded: PitchDisplay[] = (data.pitches ?? []).map((p: FinalPitch) => ({ ...p, revealed: false }))
+        if (loaded.length >= expectedPitchCount || loaded.length === 0) {
+          if (!cancelled) { setPitches(loaded); setLoading(false) }
+          return
+        }
+        // Got some but not all — keep retrying
       }
-      setLoading(false)
+      if (!cancelled) setLoading(false)
     }
     load()
-  }, [roundId])
+    return () => { cancelled = true }
+  }, [roundId, expectedPitchCount, retryCount])
 
   const reveal = (playerId: string) => {
     setPitches(prev => prev.map(p => p.player_id === playerId ? { ...p, revealed: true } : p))
@@ -42,6 +55,8 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
 
   const playerName = (id: string) => players.find(p => p.id === id)?.name ?? '?'
   const allRevealed = pitches.length > 0 && pitches.every(p => p.revealed)
+
+  const missingPitches = !loading && pitches.length < expectedPitchCount
 
   if (loading) {
     return (
@@ -59,12 +74,33 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
           <ScaleIcon />
         </div>
         <h2 style={{ fontWeight: 900, fontSize: 22, color: 'var(--navy)' }}>
-          {isJudge ? 'Pilih Pitch Terbaik!' : 'Hakim Sedang Memilih...'}
+          {isJudge ? (pitches.length > 1 ? 'Pilih Pitch Terbaik!' : 'Nilai Pitch Ini!') : 'Jomblo Sedang Memilih...'}
         </h2>
         <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 13, marginTop: 4 }}>
-          {isJudge ? 'Ketuk kartu untuk lihat, lalu pilih pemenang' : 'Tunggu keputusan hakim'}
+          {isJudge ? 'Ketuk kartu untuk lihat, lalu pilih pemenang' : 'Tunggu keputusan jomblo'}
         </p>
       </div>
+
+      {missingPitches && (
+        <div style={{
+          background: '#FEF3C7', border: '1.5px solid #FDE68A',
+          borderRadius: 12, padding: '12px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+            {pitches.length}/{expectedPitchCount} pitch dimuat
+          </p>
+          <button
+            onClick={() => setRetryCount(n => n + 1)}
+            style={{
+              background: '#F59E0B', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            }}
+          >
+            Muat ulang
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AnimatePresence>
@@ -79,7 +115,7 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
                 transition={{ delay: idx * 0.08, type: 'spring', stiffness: 280, damping: 24 }}
               >
                 {!pitch.revealed ? (
-                  <motion.button
+                  <motion.div
                     whileHover={isJudge ? { scale: 1.02, y: -2 } : {}}
                     whileTap={isJudge ? { scale: 0.97 } : {}}
                     onClick={() => isJudge && reveal(pitch.player_id)}
@@ -90,33 +126,28 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
                       padding: '18px',
                       border: '2.5px dashed #E5E7EB',
                       cursor: isJudge ? 'pointer' : 'default',
-                      textAlign: 'left',
-                      fontFamily: 'inherit',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 14,
                       boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
                     }}
                   >
-                    <CardBackLight />
-                    <div>
-                      <p style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>Pitch #{idx + 1}</p>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                      <CardBack />
+                      <CardBack />
+                      <CardBack type="red" />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <p style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>Pitch #{idx + 1}</p>
+                        {isJudge && (
+                          <p style={{ color: 'var(--red)', fontSize: 13, fontWeight: 800, marginTop: 2 }}>
+                            Ketuk untuk buka
+                          </p>
+                        )}
+                      </div>
                       {isJudge && (
-                        <p style={{ color: 'var(--red)', fontSize: 13, fontWeight: 800, marginTop: 2 }}>
-                          Ketuk untuk buka
-                        </p>
+                        <span style={{ color: 'var(--red)', fontSize: 20, fontWeight: 700 }}>→</span>
                       )}
                     </div>
-                    {isJudge && (
-                      <motion.div
-                        animate={{ x: [0, 4, 0] }}
-                        transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut', type: 'tween' }}
-                        style={{ marginLeft: 'auto', color: 'var(--red)', fontSize: 18 }}
-                      >
-                        →
-                      </motion.div>
-                    )}
-                  </motion.button>
+                  </motion.div>
                 ) : (
                   <motion.div
                     initial={{ rotateY: 90, opacity: 0 }}
@@ -157,26 +188,26 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
                       </AnimatePresence>
                     </div>
 
-                    {/* 2 green cards */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                    {/* green card(s) */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                       {pitch.green_cards.map((card: Card) => (
-                        <CardRow key={card.id} card={card} type="green" />
+                        <PlayingCard key={card.id} card={card} size="md" />
                       ))}
                     </div>
 
                     {/* Divider */}
-                    <div style={{ height: 1, background: '#F3F4F6', marginBottom: 8 }} />
+                    <div style={{ height: 1, background: '#F3F4F6', marginBottom: 12 }} />
 
                     {/* 1 red card (sabotage) */}
                     {pitch.red_card ? (
                       <div>
-                        <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                          Bendera Merah
+                        <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                          Red Flag
                         </p>
-                        <CardRow card={pitch.red_card} type="red" />
+                        <PlayingCard card={pitch.red_card} size="md" />
                       </div>
                     ) : (
-                      <p style={{ fontSize: 12, color: '#D1D5DB', fontWeight: 600 }}>Tidak ada kartu merah</p>
+                      <p style={{ fontSize: 12, color: '#D1D5DB', fontWeight: 600 }}>Tidak ada red flag</p>
                     )}
 
                     {/* Player reveal (only judge sees after selecting) */}
@@ -213,13 +244,32 @@ export function JudgeView({ roundId, players, myPlayerId, isJudge, onPick, picki
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
-function CardRow({ card, type }: { card: Card; type: 'red' | 'green' }) {
-  const bg = type === 'red' ? '#FFF1F2' : '#F0FDF4'
-  const dot = type === 'red' ? 'var(--red)' : 'var(--green)'
+function CardBack({ type = 'green' }: { type?: 'green' | 'red' }) {
+  const bg = type === 'green'
+    ? 'linear-gradient(145deg, #1a2744 0%, #1e3464 100%)'
+    : 'linear-gradient(145deg, #7f1d1d 0%, #991b1b 100%)'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: bg, borderRadius: 10, padding: '10px 12px' }}>
-      <div style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
-      <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--navy)' }}>{card.text}</p>
+    <div style={{
+      width: 68, height: 95, borderRadius: 10,
+      background: bg,
+      border: '2px solid rgba(255,255,255,0.1)',
+      position: 'relative', overflow: 'hidden', flexShrink: 0,
+    }}>
+      <svg width="60" height="87" viewBox="0 0 60 87" fill="none" style={{ position: 'absolute', top: 4, left: 4, opacity: 0.12 }}>
+        {Array.from({ length: 7 }, (_, i) => (
+          <line key={`v${i}`} x1={i * 10} y1="0" x2={i * 10} y2="87" stroke="#fff" strokeWidth="1" />
+        ))}
+        {Array.from({ length: 10 }, (_, i) => (
+          <line key={`h${i}`} x1="0" y1={i * 9} x2="60" y2={i * 9} stroke="#fff" strokeWidth="1" />
+        ))}
+      </svg>
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%',
+        width: 24, height: 24,
+        border: '1.5px solid rgba(255,255,255,0.3)',
+        borderRadius: 3,
+        transform: 'translate(-50%, -50%) rotate(45deg)',
+      }} />
     </div>
   )
 }
@@ -237,36 +287,15 @@ function ScaleIcon() {
   )
 }
 
-function CardBackLight() {
-  return (
-    <div style={{
-      width: 44,
-      height: 56,
-      borderRadius: 8,
-      background: '#F9FAFB',
-      border: '2px dashed #D1D5DB',
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 4,
-      padding: 8,
-      flexShrink: 0,
-    }}>
-      {[...Array(4)].map((_, i) => (
-        <div key={i} style={{ borderRadius: 3, background: '#E5E7EB' }} />
-      ))}
-    </div>
-  )
-}
-
 function LoadingCards() {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
       {[0, 1, 2].map(i => (
         <motion.div
           key={i}
-          animate={{ y: [0, -8, 0] }}
-          transition={{ repeat: Infinity, duration: 0.9, delay: i * 0.2, ease: 'easeInOut', type: 'tween' }}
-          style={{ width: 44, height: 60, background: '#E5E7EB', borderRadius: 10, opacity: 1 - i * 0.15 }}
+          animate={{ opacity: [0.35, 0.7, 0.35] }}
+          transition={{ repeat: Infinity, duration: 1.6, delay: i * 0.3, ease: 'easeInOut', type: 'tween' }}
+          style={{ width: 52, height: 72, background: '#E5E7EB', borderRadius: 10 }}
         />
       ))}
     </div>

@@ -53,15 +53,16 @@ export interface PlayerHand {
   round_id: string
   player_id: string
   card_ids: string[]
-  green_cards: Card[]  // 4 green cards
-  red_cards: Card[]    // 3 red cards
+  green_cards: Card[]
+  red_cards: Card[]
 }
 
 export interface RoundSubmission {
   id: string
   round_id: string
   player_id: string
-  card_ids: string[]   // 2 chosen green cards
+  card_ids: string[]     // up to 2 green cards submitted one at a time
+  cards?: Card[]         // card objects for judge live view
   submitted_at: string
 }
 
@@ -71,14 +72,14 @@ export interface RoundSabotage {
   giver_player_id: string
   receiver_player_id: string
   card_id: string
+  card?: Card            // populated for live judge view
   created_at: string
 }
 
-// What the judge sees for each player
 export interface FinalPitch {
   player_id: string
-  green_cards: Card[]  // 2 green chosen by player
-  red_card: Card       // 1 red received from previous player
+  green_cards: Card[]   // 1-2 green cards chosen by player
+  red_card: Card | null // 1 red card received via sabotage
 }
 
 export interface GameState {
@@ -88,9 +89,14 @@ export interface GameState {
   myPlayer: Player | null
   myGreenCards: Card[]
   myRedCards: Card[]
-  greenSubmissions: RoundSubmission[]     // green picks submitted so far
-  sabotageSubmissions: RoundSabotage[]    // sabotage picks submitted so far
-  greenSubmittedPlayerIds: string[]
+  greenSubmissions: RoundSubmission[]    // includes cards[] during pitching_green and sabotage
+  sabotageSubmissions: RoundSabotage[]   // includes card{} during sabotage
+  greenSubmittedPlayerIds: string[]      // players who completed green turn (2 cards)
   sabotageSubmittedPlayerIds: string[]
   isJudge: boolean
+  pitchOrder: string[]                   // non-judge player IDs in joined_at order
+  currentPitcherId: string | null        // whose green turn it is (has < 2 cards)
+  allGreenDone: boolean                  // all players sent 2 green cards → judge can advance
+  currentSabotageTargetId: string | null // whose green combo is in spotlight during sabotage
+  currentSabotagerId: string | null      // who is sending the red card now
 }

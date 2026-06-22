@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background -->
+  <rect width="64" height="64" rx="14" fill="#FAF9F6"/>
+
+  <!-- Green card: rotated left -->
+  <rect x="4" y="9" width="32" height="46" rx="6" fill="#047857" transform="rotate(-13 20 32)"/>
+  <rect x="6.5" y="11.5" width="27" height="41" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" transform="rotate(-13 20 32)"/>
+  <path d="M9.5 18 L12.5 22 L9.5 26 L6.5 22 Z" fill="rgba(255,255,255,0.7)" transform="rotate(-13 20 32)"/>
+
+  <!-- Red card: slight right tilt -->
+  <rect x="28" y="9" width="32" height="46" rx="6" fill="#B91C1C" transform="rotate(9 44 32)"/>
+  <rect x="30.5" y="11.5" width="27" height="41" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" transform="rotate(9 44 32)"/>
+  <path d="M34 18 L37 22 L34 26 L31 22 Z" fill="rgba(255,255,255,0.75)" transform="rotate(9 44 32)"/>
+
+  <!-- M on red card -->
+  <text x="44" y="36" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="18" font-weight="900" font-family="system-ui,sans-serif" letter-spacing="-1" transform="rotate(9 44 32)">M</text>
+</svg>

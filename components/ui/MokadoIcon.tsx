@@ -1,0 +1,34 @@
+// MOKADO brand icon — two fanned playing cards (green + red)
+export function MokadoIcon({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden>
+      {/* Green card — back, rotated left */}
+      <rect x="4" y="9" width="32" height="46" rx="6" fill="#047857" transform="rotate(-13 20 32)" />
+      <rect x="6.5" y="11.5" width="27" height="41" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" transform="rotate(-13 20 32)" />
+      {/* corner pip green */}
+      <path d="M9.5 18 L12.5 22 L9.5 26 L6.5 22 Z" fill="rgba(255,255,255,0.7)" transform="rotate(-13 20 32)" />
+      <path d="M9.5 38 L12.5 34 L9.5 30 L6.5 34 Z" fill="rgba(255,255,255,0.4)" transform="rotate(-13 20 32)" />
+
+      {/* Red card — front, slight right tilt */}
+      <rect x="28" y="9" width="32" height="46" rx="6" fill="#B91C1C" transform="rotate(9 44 32)" />
+      <rect x="30.5" y="11.5" width="27" height="41" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" transform="rotate(9 44 32)" />
+      {/* corner pip red */}
+      <path d="M34 18 L37 22 L34 26 L31 22 Z" fill="rgba(255,255,255,0.75)" transform="rotate(9 44 32)" />
+      <path d="M34 38 L37 34 L34 30 L31 34 Z" fill="rgba(255,255,255,0.4)" transform="rotate(9 44 32)" />
+
+      {/* center M mark on red card */}
+      <text
+        x="44" y="36"
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.55)"
+        fontSize="18"
+        fontWeight="900"
+        fontFamily="system-ui, sans-serif"
+        letterSpacing="-1"
+        transform="rotate(9 44 32)"
+      >
+        M
+      </text>
+    </svg>
+  )
+}

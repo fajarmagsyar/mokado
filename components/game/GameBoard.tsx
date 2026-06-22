@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GreenPickPhase, SabotagePhase } from './Hand'
+import { GreenPickPhase, SabotagePhase, PlayingCard, LoadingDots } from './Hand'
 import { JudgeView } from './JudgeView'
 import { Scoreboard } from './Scoreboard'
-import { FlagIcon } from '../ui/FlagIcon'
-import type { GameState } from '@/lib/game/types'
+import { Button } from '../ui/Button'
+import type { Card, GameState, Player, RoundSubmission, RoundSabotage } from '@/lib/game/types'
 
 interface GameBoardProps {
   state: GameState
@@ -18,34 +18,52 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
   const {
     room, currentRound, myPlayer, myGreenCards, myRedCards,
     greenSubmittedPlayerIds, sabotageSubmittedPlayerIds, isJudge, players,
+    greenSubmissions, sabotageSubmissions,
+    pitchOrder, currentPitcherId, allGreenDone,
+    currentSabotageTargetId, currentSabotagerId,
   } = state
+
   const [submitting, setSubmitting] = useState(false)
   const [sabotageSending, setSabotageSending] = useState(false)
+  const [advancing, setAdvancing] = useState(false)
   const [picking, setPicking] = useState(false)
   const [nextLoading, setNextLoading] = useState(false)
 
-  const hasSubmittedGreen = !!(myPlayer && greenSubmittedPlayerIds.includes(myPlayer.id))
+  void roomCode
+
+  const myGreenSubmission = greenSubmissions.find(s => s.player_id === myPlayer?.id)
+  const mySubmittedCardIds = myGreenSubmission?.card_ids ?? []
+  const hasSubmittedGreen = mySubmittedCardIds.length >= 2
   const hasSubmittedSabotage = !!(myPlayer && sabotageSubmittedPlayerIds.includes(myPlayer.id))
-  const nonJudgeCount = players.length - 1
+  const isMyGreenTurn = currentPitcherId === myPlayer?.id
+  const isMyTurnToSabotage = currentSabotagerId === myPlayer?.id
 
-  // Compute circular sabotage target client-side (mirrors server logic)
-  const nonJudgePlayers = [...players]
-    .filter(p => currentRound ? p.id !== currentRound.judge_player_id : true)
-    .sort((a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime())
-  const myNonJudgeIndex = myPlayer ? nonJudgePlayers.findIndex(p => p.id === myPlayer.id) : -1
-  const sabotageTarget = myNonJudgeIndex >= 0
-    ? nonJudgePlayers[(myNonJudgeIndex + 1) % nonJudgePlayers.length]
-    : null
+  // Target's green cards for sabotage
+  const targetGreenSub = greenSubmissions.find(s => s.player_id === currentSabotageTargetId)
+  const targetGreenCards: Card[] = targetGreenSub?.cards ?? []
+  const targetPlayer = players.find(p => p.id === currentSabotageTargetId) ?? null
 
-  const handleSubmitGreen = async (cardIds: string[]) => {
+  const handleSubmitGreen = async (cardId: string) => {
     if (!myPlayer || !currentRound) return
     setSubmitting(true)
     await fetch(`/api/rounds/${currentRound.id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: myPlayer.id, card_ids: cardIds }),
+      body: JSON.stringify({ player_id: myPlayer.id, card_id: cardId }),
     })
     setSubmitting(false)
+    onStateChange()
+  }
+
+  const handleAdvanceToSabotage = async () => {
+    if (!myPlayer || !currentRound) return
+    setAdvancing(true)
+    await fetch(`/api/rounds/${currentRound.id}/advance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: myPlayer.id }),
+    })
+    setAdvancing(false)
     onStateChange()
   }
 
@@ -103,93 +121,93 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
     )
   }
 
-  const judgeName = players.find(p => p.id === currentRound.judge_player_id)?.name ?? 'Hakim'
+  const judgeName = players.find(p => p.id === currentRound.judge_player_id)?.name ?? 'Jomblo'
 
-  // Progress counters per phase
-  const phaseProgress = currentRound.status === 'pitching_green'
-    ? { current: greenSubmittedPlayerIds.length, total: nonJudgeCount, label: 'Pitch' }
-    : currentRound.status === 'sabotage'
-    ? { current: sabotageSubmittedPlayerIds.length, total: nonJudgeCount, label: 'Sabotase' }
-    : null
+  const phaseConfig: Record<string, { label: string; color: string }> = {
+    pitching_green: { label: 'Pilih Hijau', color: '#059669' },
+    sabotage:       { label: 'Sabotase',    color: 'var(--red)' },
+    judging:        { label: 'Judging',     color: '#D97706' },
+    finished:       { label: 'Selesai',     color: '#6B7280' },
+  }
+  const activePhase = phaseConfig[currentRound.status] ?? { label: currentRound.status, color: '#6B7280' }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--cream)' }}>
       {/* Top bar */}
-      <div
-        style={{
-          background: '#fff',
-          borderBottom: '2px solid #F3F4F6',
-          padding: '12px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-        }}
-      >
-        <div>
-          <p style={{ color: '#9ca3af', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Ronde
-          </p>
-          <p style={{ color: 'var(--navy)', fontWeight: 900, fontSize: 20, lineHeight: 1 }}>
-            {currentRound.round_number}
-            <span style={{ color: '#D1D5DB', fontWeight: 700, fontSize: 15 }}> /{room.rounds_total}</span>
-          </p>
+      <div style={{
+        background: '#fff',
+        borderBottom: '1.5px solid #F0F0F2',
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <div style={{
+          padding: '10px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        }}>
+
+          {/* Left: round counter pill */}
+          <div style={{
+            background: '#F4F4F6', borderRadius: 12,
+            padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 5,
+            minWidth: 68,
+          }}>
+            <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--navy)', opacity: 0.6 }} />
+            <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--navy)', lineHeight: 1 }}>
+              {currentRound.round_number}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#B0B0BC', lineHeight: 1 }}>
+              /{room.rounds_total}
+            </span>
+          </div>
+
+          {/* Center: phase pill */}
+          <div style={{
+            flex: 1, display: 'flex', justifyContent: 'center',
+          }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: `color-mix(in srgb, ${activePhase.color} 12%, transparent)`,
+              borderRadius: 20, padding: '6px 14px',
+            }}>
+              <div style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: activePhase.color, flexShrink: 0,
+              }} />
+              <p style={{ fontSize: 12, fontWeight: 800, color: activePhase.color, whiteSpace: 'nowrap' }}>
+                {activePhase.label}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: role pill */}
+          {isJudge ? (
+            <div style={{
+              background: '#FEF2F2', border: '1.5px solid #FECDD3',
+              borderRadius: 12, padding: '6px 11px', minWidth: 68,
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5,
+            }}>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--red)', whiteSpace: 'nowrap' }}>Jomblo</p>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--red)', opacity: 0.7 }} />
+            </div>
+          ) : (
+            <div style={{
+              background: '#F4F4F6', borderRadius: 12,
+              padding: '6px 11px', minWidth: 68, textAlign: 'right',
+            }}>
+              <p style={{ fontSize: 8, fontWeight: 700, color: '#B0B0BC', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Jomblo</p>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--navy)', lineHeight: 1.2, whiteSpace: 'nowrap' }}>{judgeName}</p>
+            </div>
+          )}
         </div>
 
-        <motion.div
-          animate={{ rotate: [0, -5, 5, 0] }}
-          transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut', type: 'tween' }}
-        >
-          <FlagIcon size={28} />
-        </motion.div>
-
-        {phaseProgress ? (
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ color: '#9ca3af', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              {phaseProgress.label}
-            </p>
-            <p style={{ color: 'var(--navy)', fontWeight: 900, fontSize: 20, lineHeight: 1 }}>
-              {phaseProgress.current}
-              <span style={{ color: '#D1D5DB', fontWeight: 700, fontSize: 15 }}> /{phaseProgress.total}</span>
-            </p>
-          </div>
-        ) : (
-          <PhaseChip status={currentRound.status} />
-        )}
-      </div>
-
-      {/* Progress bar (round-level) */}
-      <div style={{ height: 4, background: '#F3F4F6' }}>
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${(currentRound.round_number / room.rounds_total) * 100}%` }}
-          style={{ height: '100%', background: 'var(--red)' }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-        />
-      </div>
-
-      {/* Phase progress strip (within a round) */}
-      <PhaseStrip status={currentRound.status} />
-
-      {/* Judge badge */}
-      <div
-        style={{
-          background: isJudge ? '#FFF1F2' : '#F0FDF4',
-          borderBottom: `2px solid ${isJudge ? '#FECDD3' : '#BBF7D0'}`,
-          padding: '10px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <div style={{
-          width: 8, height: 8, borderRadius: '50%',
-          background: isJudge ? 'var(--red)' : 'var(--green)',
-          flexShrink: 0,
-        }} />
-        <p style={{ fontWeight: 700, fontSize: 13, color: isJudge ? '#9F1239' : '#166534' }}>
-          {isJudge ? 'Kamu adalah Hakim ronde ini' : `Hakim: ${judgeName}`}
-        </p>
+        {/* Progress bar */}
+        <div style={{ height: 3, background: '#F0F0F2' }}>
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${(currentRound.round_number / room.rounds_total) * 100}%` }}
+            style={{ height: '100%', background: activePhase.color }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          />
+        </div>
       </div>
 
       {/* Main content */}
@@ -212,18 +230,20 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
                   isJudge={isJudge}
                   onPick={handlePick}
                   picking={picking}
+                  expectedPitchCount={players.length - 1}
                 />
               </motion.div>
             )}
 
             {currentRound.status === 'sabotage' && isJudge && (
-              <motion.div key="judge-wait-sabotage" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <JudgeWait
-                  title="Fase Sabotase"
-                  subtitle="Pemain sedang saling menyabotase..."
-                  current={sabotageSubmittedPlayerIds.length}
-                  total={nonJudgeCount}
-                  iconColor="var(--red)"
+              <motion.div key="judge-sabotage" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
+                <JudgeSabotageView
+                  greenSubmissions={greenSubmissions}
+                  sabotageSubmissions={sabotageSubmissions}
+                  players={players}
+                  pitchOrder={pitchOrder}
+                  currentSabotageTargetId={currentSabotageTargetId}
+                  currentSabotagerId={currentSabotagerId}
                 />
               </motion.div>
             )}
@@ -232,22 +252,29 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
               <motion.div key="sabotage" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
                 <SabotagePhase
                   redCards={myRedCards}
-                  targetPlayerName={sabotageTarget?.name ?? '...'}
+                  targetPlayer={targetPlayer}
+                  targetGreenCards={targetGreenCards}
                   onSubmit={handleSabotage}
                   submitting={sabotageSending}
                   submitted={hasSubmittedSabotage}
+                  isMyTurn={isMyTurnToSabotage}
+                  currentSabotagerId={currentSabotagerId}
+                  currentSabotageTargetId={currentSabotageTargetId}
+                  players={players}
                 />
               </motion.div>
             )}
 
             {currentRound.status === 'pitching_green' && isJudge && (
-              <motion.div key="judge-wait-green" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <JudgeWait
-                  title="Kamu Hakim!"
-                  subtitle="Menunggu semua pemain memilih kartu hijau..."
-                  current={greenSubmittedPlayerIds.length}
-                  total={nonJudgeCount}
-                  iconColor="var(--green)"
+              <motion.div key="judge-green" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
+                <JudgeLivePitch
+                  greenSubmissions={greenSubmissions}
+                  players={players}
+                  pitchOrder={pitchOrder}
+                  currentPitcherId={currentPitcherId}
+                  allGreenDone={allGreenDone}
+                  onAdvance={handleAdvanceToSabotage}
+                  advancing={advancing}
                 />
               </motion.div>
             )}
@@ -256,9 +283,15 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
               <motion.div key="green-pick" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
                 <GreenPickPhase
                   greenCards={myGreenCards}
+                  redCards={myRedCards}
                   onSubmit={handleSubmitGreen}
                   submitting={submitting}
-                  submitted={hasSubmittedGreen}
+                  mySubmittedCardIds={mySubmittedCardIds}
+                  isMyTurn={isMyGreenTurn}
+                  currentPitcherId={currentPitcherId}
+                  pitchOrder={pitchOrder}
+                  players={players}
+                  greenSubmissions={greenSubmissions}
                 />
               </motion.div>
             )}
@@ -270,127 +303,276 @@ export function GameBoard({ state, roomCode, onStateChange }: GameBoardProps) {
   )
 }
 
+// ── Judge: live green pitch view ──────────────────────────────────────────────
+
+function JudgeLivePitch({ greenSubmissions, players, pitchOrder, currentPitcherId, allGreenDone, onAdvance, advancing }: {
+  greenSubmissions: RoundSubmission[]
+  players: Player[]
+  pitchOrder: string[]
+  currentPitcherId: string | null
+  allGreenDone: boolean
+  onAdvance: () => void
+  advancing: boolean
+}) {
+  const subMap = new Map(greenSubmissions.map(s => [s.player_id, s]))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10, background: 'var(--green)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontWeight: 900, fontSize: 16, flexShrink: 0,
+        }}>1</div>
+        <div>
+          <h2 style={{ fontWeight: 900, fontSize: 20, color: 'var(--navy)', lineHeight: 1.1 }}>Kamu Jomblo!</h2>
+          <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 13, marginTop: 3 }}>
+            Perhatikan kartu masuk — setiap pemain mengirim 2 kartu
+          </p>
+        </div>
+      </div>
+
+      {/* Per-player sections */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {pitchOrder.map(pid => {
+          const sub = subMap.get(pid)
+          const cardCount = sub?.card_ids?.length ?? 0
+          const isDone = cardCount >= 2
+          const isActive = pid === currentPitcherId
+          const player = players.find(p => p.id === pid)
+          const submittedCards: Card[] = sub?.cards ?? []
+
+          if (isDone) {
+            return (
+              <motion.div
+                key={pid}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  background: '#fff',
+                  border: '2.5px solid #BBF7D0',
+                  borderRadius: 16,
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%', background: 'var(--green)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5 L4 7 L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <p style={{ fontWeight: 800, fontSize: 14, color: '#166534' }}>{player?.name}</p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginLeft: 'auto' }}>2/2</p>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {submittedCards.map(card => (
+                    <PlayingCard key={card.id} card={card} size="lg" disabled />
+                  ))}
+                </div>
+              </motion.div>
+            )
+          }
+
+          if (isActive) {
+            return (
+              <motion.div
+                key={pid}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  background: '#fff',
+                  border: '2.5px dashed #BBF7D0',
+                  borderRadius: 16,
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
+                  <p style={{ fontWeight: 800, fontSize: 13, color: 'var(--navy)' }}>{player?.name}</p>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginLeft: 'auto' }}>
+                    {cardCount}/2 kartu
+                  </p>
+                </div>
+                {submittedCards.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {submittedCards.map(card => (
+                      <AnimatePresence key={card.id} mode="popLayout">
+                        <motion.div
+                          key={card.id}
+                          initial={{ y: -20, opacity: 0, scale: 0.85 }}
+                          animate={{ y: 0, opacity: 1, scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+                        >
+                          <PlayingCard card={card} size="lg" disabled />
+                        </motion.div>
+                      </AnimatePresence>
+                    ))}
+                    {cardCount < 2 && (
+                      <div style={{
+                        width: 136, height: 190, borderRadius: 10,
+                        border: '2.5px dashed #D1D5DB',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <LoadingDots />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }}>
+                    <LoadingDots />
+                    <p style={{ fontWeight: 600, fontSize: 13, color: '#9ca3af' }}>Menunggu kartu pertama...</p>
+                  </div>
+                )}
+              </motion.div>
+            )
+          }
+
+          // Upcoming — not shown yet
+          return null
+        })}
+      </div>
+
+      {/* Continue button for judge */}
+      {allGreenDone && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <Button size="lg" onClick={onAdvance} loading={advancing} style={{ width: '100%' }}>
+            Lanjut ke Fase Sabotase →
+          </Button>
+        </motion.div>
+      )}
+
+      {!allGreenDone && (
+        <p style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#9ca3af' }}>
+          Tombol lanjut muncul setelah semua pemain mengirim 2 kartu
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Judge: sabotage view ──────────────────────────────────────────────────────
+
+function JudgeSabotageView({ greenSubmissions, sabotageSubmissions, players, pitchOrder, currentSabotageTargetId, currentSabotagerId }: {
+  greenSubmissions: RoundSubmission[]
+  sabotageSubmissions: RoundSabotage[]
+  players: Player[]
+  pitchOrder: string[]
+  currentSabotageTargetId: string | null
+  currentSabotagerId: string | null
+}) {
+  const greenSubMap = new Map(greenSubmissions.map(s => [s.player_id, s]))
+  const receivedMap = new Map(sabotageSubmissions.map(s => [s.receiver_player_id, s]))
+  const currentPitcher = players.find(p => p.id === currentSabotagerId)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10, background: 'var(--red)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontWeight: 900, fontSize: 16, flexShrink: 0,
+        }}>2</div>
+        <div>
+          <h2 style={{ fontWeight: 900, fontSize: 20, color: 'var(--navy)', lineHeight: 1.1 }}>Fase Sabotase</h2>
+          <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 13, marginTop: 3 }}>
+            Setiap pemain mengirim red flag ke pitch lawan
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {pitchOrder.map(pid => {
+          const isDone = receivedMap.has(pid)
+          const isActive = pid === currentSabotageTargetId
+          if (!isDone && !isActive) return null
+
+          const player = players.find(p => p.id === pid)
+          const greenCards: Card[] = greenSubMap.get(pid)?.cards ?? []
+          const sab = receivedMap.get(pid)
+
+          if (isDone) {
+            return (
+              <motion.div
+                key={pid}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  background: '#fff', border: '2.5px solid #FECDD3',
+                  borderRadius: 16, padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%', background: 'var(--red)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5 L4 7 L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <p style={{ fontWeight: 800, fontSize: 14, color: '#9F1239' }}>{player?.name}</p>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 14 }}>
+                  {greenCards.map(card => (
+                    <PlayingCard key={card.id} card={card} size="lg" disabled />
+                  ))}
+                </div>
+                {sab?.card && (
+                  <>
+                    <div style={{ height: 1, background: '#F3F4F6', marginBottom: 12 }} />
+                    <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                      Red Flag
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <PlayingCard card={sab.card} size="lg" disabled />
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )
+          }
+
+          // isActive — target's green combo + incoming red
+          return (
+            <motion.div
+              key={pid}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: '#fff', border: '2.5px dashed #FECDD3',
+                borderRadius: 16, padding: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--red)' }} />
+                <p style={{ fontWeight: 800, fontSize: 13, color: 'var(--navy)' }}>
+                  {player?.name}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 14 }}>
+                {greenCards.map(card => (
+                  <PlayingCard key={card.id} card={card} size="lg" disabled />
+                ))}
+              </div>
+              <div style={{ height: 1, background: '#F3F4F6', marginBottom: 12 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--red)', opacity: 0.5 }} />
+                <p style={{ fontWeight: 600, fontSize: 12, color: '#9ca3af' }}>
+                  {currentPitcher?.name} sedang memilih red flag...
+                </p>
+                <div style={{ marginLeft: 'auto' }}><LoadingDots /></div>
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function PhaseChip({ status }: { status: string }) {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    judging: { label: 'Judging', color: '#9F1239', bg: '#FFF1F2' },
-    finished: { label: 'Selesai', color: '#166534', bg: '#F0FDF4' },
-  }
-  const cfg = map[status] ?? { label: status, color: '#6b7280', bg: '#F9FAFB' }
-  return (
-    <div style={{ background: cfg.bg, borderRadius: 20, padding: '4px 12px' }}>
-      <p style={{ fontSize: 12, fontWeight: 800, color: cfg.color }}>{cfg.label}</p>
-    </div>
-  )
-}
-
-function PhaseStrip({ status }: { status: string }) {
-  const phases = [
-    { key: 'pitching_green', label: 'Pilih Hijau', color: 'var(--green)' },
-    { key: 'sabotage', label: 'Sabotase', color: 'var(--red)' },
-    { key: 'judging', label: 'Judging', color: 'var(--gold)' },
-  ]
-  const activeIdx = phases.findIndex(p => p.key === status)
-
-  return (
-    <div style={{ display: 'flex', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-      {phases.map((phase, i) => {
-        const isDone = i < activeIdx
-        const isActive = i === activeIdx
-        return (
-          <div
-            key={phase.key}
-            style={{
-              flex: 1,
-              padding: '6px 4px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              borderBottom: isActive ? `3px solid ${phase.color}` : '3px solid transparent',
-              transition: 'border-color 0.3s',
-            }}
-          >
-            <p style={{
-              fontSize: 10,
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: isActive ? phase.color : isDone ? '#9ca3af' : '#D1D5DB',
-            }}>
-              {phase.label}
-            </p>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function JudgeWait({ title, subtitle, current, total, iconColor }: {
-  title: string; subtitle: string; current: number; total: number; iconColor: string
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '48px 0', textAlign: 'center' }}
-    >
-      <motion.div
-        animate={{ scale: [1, 1.08, 1] }}
-        transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut', type: 'tween' }}
-      >
-        <ScaleWaitIcon color={iconColor} />
-      </motion.div>
-      <div>
-        <p style={{ fontWeight: 900, fontSize: 22, color: 'var(--navy)' }}>{title}</p>
-        <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 14, marginTop: 4 }}>{subtitle}</p>
-      </div>
-      <SubmitProgress current={current} total={total} color={iconColor} />
-    </motion.div>
-  )
-}
-
-function ScaleWaitIcon({ color }: { color: string }) {
-  const light = color === 'var(--green)' ? '#F0FDF4' : '#FFF1F2'
-  const faint = color === 'var(--green)' ? '#BBF7D0' : '#FECDD3'
-  return (
-    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" aria-hidden>
-      <circle cx="40" cy="40" r="36" fill={light} />
-      <rect x="38" y="18" width="4" height="32" rx="2" fill={faint} />
-      <path d="M24 34 L24 44 Q24 52 32 52 Q40 52 40 44 L40 34 Z" fill={color} opacity="0.9" />
-      <path d="M40 34 L40 44 Q40 52 48 52 Q56 52 56 44 L56 34 Z" fill={color} opacity="0.35" />
-      <rect x="20" y="32" width="20" height="3" rx="1.5" fill={color} opacity="0.9" />
-      <rect x="40" y="32" width="20" height="3" rx="1.5" fill={color} opacity="0.35" />
-    </svg>
-  )
-}
-
-function SubmitProgress({ current, total, color }: { current: number; total: number; color: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-      <div style={{ display: 'flex', gap: 8 }}>
-        {[...Array(total)].map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: i * 0.08 }}
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: '50%',
-              background: i < current ? color : '#E5E7EB',
-              border: `2.5px solid ${i < current ? color : '#D1D5DB'}`,
-              transition: 'background 0.3s',
-            }}
-          />
-        ))}
-      </div>
-      <p style={{ fontSize: 13, fontWeight: 700, color: '#6b7280' }}>
-        {current} dari {total} sudah submit
-      </p>
-    </div>
-  )
-}

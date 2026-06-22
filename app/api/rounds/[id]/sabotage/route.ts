@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getNonJudgePlayers, getSabotageTarget } from '@/lib/game/logic'
+import { getNonJudgePlayers } from '@/lib/game/logic'
 
 export async function POST(
   request: Request,
@@ -23,9 +23,38 @@ export async function POST(
 
   if (!round) return NextResponse.json({ error: 'Round tidak ditemukan' }, { status: 404 })
   if (round.status !== 'sabotage') return NextResponse.json({ error: 'Bukan fase sabotase' }, { status: 400 })
-  if (round.judge_player_id === player_id) return NextResponse.json({ error: 'Hakim tidak bisa sabotase' }, { status: 400 })
+  if (round.judge_player_id === player_id) return NextResponse.json({ error: 'Jomblo tidak bisa sabotase' }, { status: 400 })
 
-  // Validate: card must be red and in player's hand
+  // Validate it's this player's turn — sequential: currentSabotagerId must match player_id
+  const { data: players } = await supabase
+    .from('players')
+    .select('id, joined_at')
+    .eq('room_id', round.room_id)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nonJudgePlayers = getNonJudgePlayers((players ?? []) as any, round.judge_player_id)
+
+  const { data: existingSabs } = await supabase
+    .from('round_sabotage')
+    .select('receiver_player_id')
+    .eq('round_id', id)
+
+  const receivedIds = (existingSabs ?? []).map(s => s.receiver_player_id)
+  const currentTargetIdx = nonJudgePlayers.findIndex(p => !receivedIds.includes(p.id))
+
+  if (currentTargetIdx === -1) {
+    return NextResponse.json({ error: 'Sabotase sudah selesai' }, { status: 400 })
+  }
+
+  const currentTarget = nonJudgePlayers[currentTargetIdx]
+  const currentSabotagerIdx = (currentTargetIdx - 1 + nonJudgePlayers.length) % nonJudgePlayers.length
+  const currentSabotager = nonJudgePlayers[currentSabotagerIdx]
+
+  if (currentSabotager.id !== player_id) {
+    return NextResponse.json({ error: 'Bukan giliranmu untuk menyabotase' }, { status: 400 })
+  }
+
+  // Validate card is red and in player's hand
   const { data: hand } = await supabase
     .from('player_hands')
     .select('card_ids')
@@ -42,28 +71,10 @@ export async function POST(
     return NextResponse.json({ error: 'Harus pilih kartu merah' }, { status: 400 })
   }
 
-  // Determine target: next player in joined_at order (circular among non-judges)
-  const { data: players } = await supabase
-    .from('players')
-    .select('id, joined_at')
-    .eq('room_id', round.room_id)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nonJudgePlayers = getNonJudgePlayers((players ?? []) as any, round.judge_player_id)
-  const giverIndex = nonJudgePlayers.findIndex(p => p.id === player_id)
-  if (giverIndex === -1) return NextResponse.json({ error: 'Pemain tidak ditemukan' }, { status: 400 })
-
-  const target = getSabotageTarget(nonJudgePlayers, giverIndex)
-
   const { data: sabotage, error } = await supabase
     .from('round_sabotage')
     .upsert(
-      {
-        round_id: id,
-        giver_player_id: player_id,
-        receiver_player_id: target.id,
-        card_id,
-      },
+      { round_id: id, giver_player_id: player_id, receiver_player_id: currentTarget.id, card_id },
       { onConflict: 'round_id,giver_player_id' }
     )
     .select()
@@ -71,7 +82,7 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Check if all non-judge players submitted sabotage
+  // Auto-advance to judging when all have sabotaged
   const { count } = await supabase
     .from('round_sabotage')
     .select('id', { count: 'exact', head: true })
@@ -81,10 +92,10 @@ export async function POST(
     await supabase.from('rounds').update({ status: 'judging' }).eq('id', id)
   }
 
-  return NextResponse.json({ sabotage, target_player_id: target.id })
+  return NextResponse.json({ sabotage, target_player_id: currentTarget.id })
 }
 
-// GET: returns who this player will sabotage (preview)
+// GET: preview who this player will sabotage
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -115,8 +126,8 @@ export async function GET(
   const giverIndex = nonJudgePlayers.findIndex(p => p.id === playerId)
   if (giverIndex === -1) return NextResponse.json({ target: null })
 
-  const target = getSabotageTarget(nonJudgePlayers, giverIndex)
-  const targetPlayer = players?.find(p => p.id === target.id)
+  const targetIndex = (giverIndex + 1) % nonJudgePlayers.length
+  const targetPlayer = players?.find(p => p.id === nonJudgePlayers[targetIndex].id)
 
   return NextResponse.json({ target: targetPlayer ?? null })
 }

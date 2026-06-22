@@ -28,7 +28,8 @@ export default function JoinPage() {
     setLoading(false)
 
     if (!res.ok) { setError(data.error ?? 'Gagal masuk'); return }
-    router.push(`/room/${code.toUpperCase()}?player_id=${data.player.id}`)
+    localStorage.setItem(`player_id_${code.toUpperCase()}`, data.player.id)
+    router.push(`/room/${code.toUpperCase()}`)
   }
 
   return (

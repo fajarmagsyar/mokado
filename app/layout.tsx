@@ -9,8 +9,8 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Red Flag",
-  description: "Game kartu red flag dalam Bahasa Indonesia",
+  title: "MOKADO",
+  description: "Modal Kartu Doang! — Game kartu seru bareng teman",
 };
 
 export default function RootLayout({

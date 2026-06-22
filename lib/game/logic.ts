@@ -32,16 +32,18 @@ export async function dealCards(
 
   const nonJudgePlayers = players.filter(p => p.id !== judgePlayerId)
 
-  const hands = nonJudgePlayers.map(player => {
-    const shuffledGreen = [...greenIds].sort(() => Math.random() - 0.5).slice(0, 4)
-    const shuffledRed = [...redIds].sort(() => Math.random() - 0.5).slice(0, 3)
-    return {
-      round_id: roundId,
-      player_id: player.id,
-      // Store green first (indices 0-3), then red (indices 4-6)
-      card_ids: [...shuffledGreen, ...shuffledRed],
-    }
-  })
+  // Shuffle once, deal without replacement so no player shares a card
+  const shuffledGreen = [...greenIds].sort(() => Math.random() - 0.5)
+  const shuffledRed = [...redIds].sort(() => Math.random() - 0.5)
+
+  const hands = nonJudgePlayers.map((player, i) => ({
+    round_id: roundId,
+    player_id: player.id,
+    card_ids: [
+      ...shuffledGreen.slice(i * 4, (i + 1) * 4),
+      ...shuffledRed.slice(i * 3, (i + 1) * 3),
+    ],
+  }))
 
   await supabase.from('player_hands').insert(hands)
 }

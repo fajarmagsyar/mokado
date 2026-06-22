@@ -44,13 +44,9 @@ export function Scoreboard({ state, isFinished, onNext, onNextLoading }: Scorebo
             <p style={{ color: '#92400E', fontSize: 12, fontWeight: 700, marginTop: 10 }}>
               Pemenang Ronde Ini
             </p>
-            <motion.p
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut', type: 'tween' }}
-              style={{ color: '#78350F', fontWeight: 900, fontSize: 24, marginTop: 4 }}
-            >
+            <p style={{ color: '#78350F', fontWeight: 900, fontSize: 24, marginTop: 4 }}>
               {winnerName}
-            </motion.p>
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -156,9 +152,7 @@ export function Scoreboard({ state, isFinished, onNext, onNextLoading }: Scorebo
         </Button>
       )}
       {!isFinished && !myPlayer?.is_host && (
-        <motion.div
-          animate={{ opacity: [1, 0.55, 1] }}
-          transition={{ repeat: Infinity, duration: 1.5, type: 'tween' }}
+        <div
           style={{
             background: '#F9FAFB',
             border: '2px solid #F3F4F6',
@@ -171,7 +165,7 @@ export function Scoreboard({ state, isFinished, onNext, onNextLoading }: Scorebo
           }}
         >
           Menunggu host melanjutkan...
-        </motion.div>
+        </div>
       )}
       {isFinished && (
         <Button variant="secondary" size="lg" onClick={() => { window.location.href = '/' }} style={{ width: '100%' }}>

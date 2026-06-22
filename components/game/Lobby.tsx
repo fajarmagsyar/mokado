@@ -1,11 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RoomCode } from './RoomCode'
 import { PlayerAvatar } from './PlayerAvatar'
 import { Button } from '../ui/Button'
 import { DecorBg } from '../ui/DecorBg'
-import { FlagIcon } from '../ui/FlagIcon'
+import { MokadoIcon } from '../ui/MokadoIcon'
 import type { GameState } from '@/lib/game/types'
 
 interface LobbyProps {
@@ -39,12 +40,15 @@ export function Lobby({ state, onStart, onLeave, starting }: LobbyProps) {
             transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut', type: 'tween' }}
             style={{ display: 'inline-block' }}
           >
-            <FlagIcon size={40} />
+            <MokadoIcon size={52} />
           </motion.div>
-          <h1 style={{ fontWeight: 900, fontSize: 28, color: 'var(--navy)', marginTop: 8, letterSpacing: '-0.01em' }}>
-            Red Flag
+          <h1 style={{ fontWeight: 900, fontSize: 28, color: 'var(--navy)', marginTop: 8, letterSpacing: '-0.02em' }}>
+            MOKADO
           </h1>
-          <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 13 }}>Menunggu pemain bergabung...</p>
+          <p style={{ color: '#059669', fontWeight: 800, fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>
+            Modal Kartu Doang!
+          </p>
+          <p style={{ color: '#9ca3af', fontWeight: 600, fontSize: 13, marginTop: 4 }}>Menunggu pemain bergabung...</p>
         </div>
 
         {/* Room code */}
@@ -143,6 +147,9 @@ export function Lobby({ state, onStart, onLeave, starting }: LobbyProps) {
           ))}
         </div>
 
+        {/* Table view link */}
+        <TableViewCard roomCode={room.code} />
+
         {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {myPlayer?.is_host ? (
@@ -199,6 +206,88 @@ export function Lobby({ state, onStart, onLeave, starting }: LobbyProps) {
           </Button>
         </div>
       </motion.div>
+    </div>
+  )
+}
+
+// ── Table view card ───────────────────────────────────────────────────────────
+
+function TableViewCard({ roomCode }: { roomCode: string }) {
+  const [copied, setCopied] = useState(false)
+  const tableUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/room/${roomCode}/table`
+    : `/room/${roomCode}/table`
+
+  const copy = () => {
+    navigator.clipboard.writeText(tableUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: 16,
+      padding: '14px 16px',
+      boxShadow: '0 2px 12px rgba(26,26,46,0.07)',
+      border: '2px solid #E5E7EB',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        {/* TV icon */}
+        <div style={{
+          width: 36, height: 36, borderRadius: 10, background: '#0D1221',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="20" height="16" viewBox="0 0 20 16" fill="none">
+            <rect x="1" y="1" width="18" height="12" rx="2" stroke="#F1F5F9" strokeWidth="1.6" />
+            <rect x="6" y="13" width="8" height="2" rx="1" fill="#F1F5F9" opacity="0.5" />
+            <rect x="8" y="15" width="4" height="1" rx="0.5" fill="#F1F5F9" opacity="0.3" />
+          </svg>
+        </div>
+        <div>
+          <p style={{ fontWeight: 800, fontSize: 13, color: 'var(--navy)' }}>Table View</p>
+          <p style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', lineHeight: 1.3 }}>
+            Buka di TV / tablet di meja
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{
+          flex: 1, background: '#F9FAFB', border: '1.5px solid #E5E7EB',
+          borderRadius: 8, padding: '7px 10px',
+          fontSize: 11, fontWeight: 700, color: '#6b7280',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          /room/{roomCode}/table
+        </div>
+        <motion.button
+          onClick={copy}
+          whileTap={{ scale: 0.94 }}
+          style={{
+            background: copied ? '#059669' : 'var(--navy)',
+            color: '#fff', border: 'none', borderRadius: 8,
+            padding: '7px 14px', fontSize: 12, fontWeight: 800,
+            cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s',
+          }}
+        >
+          {copied ? '✓ Disalin' : 'Salin'}
+        </motion.button>
+        <motion.a
+          href={tableUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          whileTap={{ scale: 0.94 }}
+          style={{
+            background: '#F3F4F6', color: 'var(--navy)', border: '1.5px solid #E5E7EB',
+            borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 800,
+            cursor: 'pointer', flexShrink: 0, textDecoration: 'none', display: 'block',
+          }}
+        >
+          Buka →
+        </motion.a>
+      </div>
     </div>
   )
 }

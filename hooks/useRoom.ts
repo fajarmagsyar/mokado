@@ -11,9 +11,13 @@ interface UseRoomOptions {
 
 export function useRoom({ code, myPlayerId }: UseRoomOptions) {
   const [state, setState] = useState<GameState | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [rawLoading, setRawLoading] = useState(true)
+  const [statePlayerId, setStatePlayerId] = useState<string | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
+
+  // True while state hasn't yet been fetched for the current myPlayerId
+  const loading = rawLoading || statePlayerId !== myPlayerId
 
   const fetchState = useCallback(async () => {
     const res = await fetch(`/api/rooms/${code}/state`)
@@ -48,11 +52,20 @@ export function useRoom({ code, myPlayerId }: UseRoomOptions) {
       myRedCards,
       greenSubmissions,
       sabotageSubmissions,
-      greenSubmittedPlayerIds: greenSubmissions.map((s: RoundSubmission) => s.player_id),
+      // "completed" means sent 2 green cards
+      greenSubmittedPlayerIds: greenSubmissions
+        .filter((s: RoundSubmission) => (s.card_ids?.length ?? 0) >= 2)
+        .map((s: RoundSubmission) => s.player_id),
       sabotageSubmittedPlayerIds: sabotageSubmissions.map((s: RoundSabotage) => s.giver_player_id),
       isJudge: !!(currentRound && myPlayerId && currentRound.judge_player_id === myPlayerId),
+      pitchOrder: data.pitchOrder ?? [],
+      currentPitcherId: data.currentPitcherId ?? null,
+      allGreenDone: data.allGreenDone ?? false,
+      currentSabotageTargetId: data.currentSabotageTargetId ?? null,
+      currentSabotagerId: data.currentSabotagerId ?? null,
     })
-    setLoading(false)
+    setStatePlayerId(myPlayerId)
+    setRawLoading(false)
   }, [code, myPlayerId])
 
   useEffect(() => { fetchState() }, [fetchState])

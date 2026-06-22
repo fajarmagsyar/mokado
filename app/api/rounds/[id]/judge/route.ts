@@ -25,7 +25,7 @@ export async function POST(
   }
 
   if (round.judge_player_id !== player_id) {
-    return NextResponse.json({ error: 'Hanya hakim yang bisa memilih pemenang' }, { status: 403 })
+    return NextResponse.json({ error: 'Hanya jomblo yang bisa memilih pemenang' }, { status: 403 })
   }
 
   if (round.status !== 'judging') {
