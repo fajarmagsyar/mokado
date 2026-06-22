@@ -1,65 +1,162 @@
-import Image from "next/image";
+'use client'
+
+import Link from 'next/link'
+import { motion, type Variants } from 'framer-motion'
+import { DecorBg } from '@/components/ui/DecorBg'
+import { FlagIcon } from '@/components/ui/FlagIcon'
+
+const container: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12 } },
+}
+const item: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } as never },
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
+      style={{ background: 'var(--cream)' }}
+    >
+      <DecorBg />
+
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="relative z-10 flex flex-col items-center gap-6 w-full max-w-xs"
+      >
+        {/* Logo mark */}
+        <motion.div
+          variants={item}
+          className="flex flex-col items-center gap-3"
+        >
+          <motion.div
+            animate={{ y: [0, -8, 0] }}
+            transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut', type: 'tween' }}
+          >
+            <FlagIcon size={64} />
+          </motion.div>
+
+          <div className="text-center">
+            <h1
+              style={{
+                fontWeight: 900,
+                fontSize: 42,
+                color: 'var(--navy)',
+                letterSpacing: '-0.02em',
+                lineHeight: 1,
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              Red Flag
+            </h1>
+            <p style={{ color: '#6b7280', fontWeight: 600, fontSize: 14, marginTop: 8 }}>
+              Game kartu seru bareng teman
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Card container */}
+        <motion.div
+          variants={item}
+          style={{
+            background: '#fff',
+            borderRadius: 24,
+            padding: '28px 24px',
+            width: '100%',
+            boxShadow: '0 8px 32px rgba(26,26,46,0.10)',
+          }}
+        >
+          <div className="flex flex-col gap-3">
+            <Link href="/join" style={{ display: 'block', textDecoration: 'none' }}>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96, y: 2 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                style={{
+                  background: 'var(--red)',
+                  borderRadius: 14,
+                  padding: '16px 20px',
+                  boxShadow: '0 4px 0 var(--red-dark)',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: 16,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                Gabung Room
+              </motion.div>
+            </Link>
+
+            <Link href="/dashboard" style={{ display: 'block', textDecoration: 'none' }}>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96, y: 2 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                style={{
+                  background: '#F3F4F6',
+                  borderRadius: 14,
+                  padding: '16px 20px',
+                  boxShadow: '0 4px 0 #D1D5DB',
+                  color: 'var(--navy)',
+                  fontWeight: 800,
+                  fontSize: 16,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: '2px solid #E5E7EB',
+                }}
+              >
+                Buat Room
+              </motion.div>
+            </Link>
+          </div>
+
+          <p style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600, textAlign: 'center', marginTop: 16 }}>
+            Hanya host yang perlu daftar akun
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        </motion.div>
+
+        {/* Decorative cards preview */}
+        <motion.div variants={item} className="flex gap-3 justify-center">
+          {['red', 'green', 'red'].map((type, i) => (
+            <motion.div
+              key={i}
+              animate={{ y: [0, -4, 0] }}
+              transition={{
+                repeat: Infinity,
+                duration: 2,
+                ease: 'easeInOut',
+                delay: i * 0.4,
+                type: 'tween',
+              }}
+              style={{
+                width: 48,
+                height: 68,
+                borderRadius: 8,
+                background: '#fff',
+                boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+                border: `3px solid ${type === 'red' ? 'var(--red)' : 'var(--green)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: type === 'red' ? 'var(--red)' : 'var(--green)',
+                  opacity: 0.5,
+                }}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
     </div>
-  );
+  )
 }
